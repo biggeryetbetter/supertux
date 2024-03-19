@@ -209,6 +209,7 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   m_backflip_timer(),
   m_physic(),
   m_wind_velocity(),
+  m_wind_acceleration(),
   m_visible(true),
   m_grabbed_object(nullptr),
   m_grabbed_object_remove_listener(new GrabListener(*this)),
@@ -918,67 +919,46 @@ Player::swim(float pointx, float pointy, bool boost)
 
     if (m_swimming && !m_water_jump)
     {
+      m_swimming_accel_modifier = is_ang_defined ? 1.f : 0.f;
 
-      if(is_ang_defined && std::abs(delta) < 0.01f)
-        m_swimming_angle = pointed_angle;
-
-      m_swimming_accel_modifier = is_ang_defined ? 600.f : 0.f;
-      Vector swimming_direction = math::vec2_from_polar(m_swimming_accel_modifier, pointed_angle);
-
-      m_physic.set_acceleration_x((swimming_direction.x - 1.0f * vx) * 2.f);
-      m_physic.set_acceleration_y((swimming_direction.y - 1.0f * vy) * 2.f);
-
-      // Limit speed, if you go above this speed your acceleration is set to opposite (?)
-      if (glm::length(m_physic.get_velocity()) > SWIM_SPEED)
+      if (boost) {
+        m_swimming_accel_modifier = m_swimming_accel_modifier * SWIM_BOOST_SPEED;
+        m_swimboosting = true;
+      }
+      else
       {
-        m_physic.set_acceleration(-vx,-vy);   // Was too lazy to set it properly ~~zwatotem
+        m_swimming_accel_modifier = m_swimming_accel_modifier * SWIM_SPEED;
+        if (glm::length(m_physic.get_velocity()) < SWIM_SPEED + 10.f) {
+          m_swimboosting = false;
+        }
+      }
+
+      if (is_ang_defined)
+      {
+        if (std::abs(delta) < 0.01f)
+          m_swimming_angle = pointed_angle;
+
+        Vector swimming_direction = math::vec2_from_polar(m_swimming_accel_modifier, pointed_angle);
+        Vector diff = m_physic.get_velocity() - swimming_direction;
+        float diff_len = glm::length(diff);
+
+        float accel_power = glm::length(m_wind_velocity) > 0.0f ? 1.f / m_wind_acceleration : 0.33f;
+
+        m_physic.set_velocity_x(vx - (diff.x * pow(1.f/std::max(1.f, diff_len), accel_power)));
+        m_physic.set_velocity_y(vy - (diff.y * pow(1.f/std::max(1.f, diff_len), accel_power)));
       }
 
       // Natural friction
       if (!is_ang_defined)
       {
-        m_physic.set_acceleration(-3.f*vx, -3.f*vy);
-      }
-
-      //not boosting? let's slow this penguin down!!!
-      if (!boost && is_ang_defined && glm::length(m_physic.get_velocity()) > (SWIM_SPEED + 10.f))
-      {
-        m_physic.set_acceleration(-5.f*vx, -5.f*vy);
+        m_physic.set_velocity(vx * 0.95f, vy * 0.95f);
       }
 
       // Snapping to prevent unwanted floating
-        if (!is_ang_defined && glm::length(Vector(vx,vy)) < 100.f)
+      if (!is_ang_defined && glm::length(Vector(vx,vy)) < 100.f)
       {
         vx = 0;
         vy = 0;
-      }
-
-      // Turbo, using pointsign
-      float minboostspeed = 100.f;
-      if (boost && glm::length(m_physic.get_velocity()) > minboostspeed)
-      {
-        if (glm::length(m_physic.get_velocity()) < SWIM_BOOST_SPEED)
-        {
-          m_swimboosting = true;
-          if (is_ang_defined)
-          {
-            vx += SWIM_TO_BOOST_ACCEL * pointx;
-            vy += SWIM_TO_BOOST_ACCEL * pointy;
-          }
-        }
-        else
-        {
-          //cap on boosting
-          m_physic.set_acceleration(-vx, -vy);
-        }
-        m_physic.set_velocity(vx, vy);
-      }
-      else
-      {
-          if (glm::length(m_physic.get_velocity()) < (SWIM_SPEED + 10.f))
-        {
-          m_swimboosting = false;
-        }
       }
     }
     if (m_water_jump && !m_swimming)
@@ -1473,6 +1453,7 @@ Player::handle_input()
 
   m_physic.set_velocity(m_physic.get_velocity() + m_wind_velocity);
   m_wind_velocity = Vector(0.f, 0.f);
+  m_wind_acceleration = 0.0;
 
   /* grabbing */
   bool just_grabbed = try_grab();
@@ -2886,8 +2867,10 @@ Player::remove_collected_key(Key* key)
 }
 
 void
-Player::add_wind_velocity(const Vector& velocity, const Vector& end_speed)
+Player::add_wind_velocity(const Vector& speed, const float acceleration, const Vector& end_speed)
 {
+  Vector velocity = speed * acceleration;
+  m_wind_acceleration = acceleration;
   // Only add velocity in the same direction as the wind.
   if (end_speed.x > 0 && m_physic.get_velocity_x() < end_speed.x)
     m_wind_velocity.x = std::min(m_wind_velocity.x + velocity.x, end_speed.x);
