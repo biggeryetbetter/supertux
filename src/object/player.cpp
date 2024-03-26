@@ -510,6 +510,7 @@ Player::update(float dt_sec)
         m_water_jump = false;
         m_swimming = true;
         m_swimming_angle = math::angle(Vector(m_physic.get_velocity_x(), m_physic.get_velocity_y()));
+        m_physic.set_acceleration(0.0f, 0.0f);
         if (is_big())
           adjust_height(TUX_WIDTH);
         m_wants_buttjump = m_does_buttjump = m_backflipping = false;
@@ -946,12 +947,8 @@ Player::swim(float pointx, float pointy, bool boost)
 
         m_physic.set_velocity_x(vx - (diff.x * pow(1.f/std::max(1.f, diff_len), accel_power)));
         m_physic.set_velocity_y(vy - (diff.y * pow(1.f/std::max(1.f, diff_len), accel_power)));
-      }
-
-      // Natural friction
-      if (!is_ang_defined)
-      {
-        m_physic.set_velocity(vx * 0.95f, vy * 0.95f);
+      } else {
+        apply_friction();
       }
 
       // Snapping to prevent unwanted floating
@@ -985,7 +982,7 @@ Player::swim(float pointx, float pointy, bool boost)
     //Force the speed to point in the direction Tux is going unless Tux is being pushed by something else
     if (m_swimming && !m_water_jump && boost && m_boost == 0.f && !m_velocity_override)
     {
-      m_physic.set_velocity(math::at_angle(m_physic.get_velocity(), m_swimming_angle));
+      // m_physic.set_velocity(math::at_angle(m_physic.get_velocity(), m_swimming_angle));
     }
   }
 }
@@ -1016,11 +1013,18 @@ Player::apply_friction()
 {
   bool is_on_ground = on_ground();
   float velx = m_physic.get_velocity_x();
+  float vely = m_physic.get_velocity_y();
   if (is_on_ground && (fabsf(velx) < (m_stone ? 5.f : WALK_SPEED))) {
     m_physic.set_velocity_x(0);
     m_physic.set_acceleration_x(0);
     return;
   }
+
+  if (m_swimming) {
+    m_physic.set_velocity(velx * 0.95f, vely * 0.95f);
+    return;
+  }
+
   float friction = WALK_ACCELERATION_X;
   if (m_on_ice && is_on_ground)
     //we need this or else sliding on ice will cause Tux to go on for a very long time
