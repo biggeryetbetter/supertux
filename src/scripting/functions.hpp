@@ -290,16 +290,10 @@ void set_gamma(float gamma);
 int rand();
 
 /**
- * Records a demo to the given file.
- * @param string $filename
+ * Sets the frame, displayed on the title screen.
+ * @param string $image
  */
-void record_demo(const std::string& filename);
-
-/**
- * Plays back a demo from the given file.
- * @param string $filename
- */
-void play_demo(const std::string& filename);
+void set_title_frame(const std::string& image);
 
 #ifdef DOXYGEN_SCRIPTING
 }

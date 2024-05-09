@@ -62,7 +62,7 @@ WorldMapSector::current()
 WorldMapSector::WorldMapSector(WorldMap& parent) :
   Base::Sector("worldmap"),
   m_parent(parent),
-  m_camera(new Camera),
+  m_camera(new Camera(*this)),
   m_tux(&add<Tux>(&parent)),
   m_spawnpoints(),
   m_initial_fade_tilemap(),
@@ -81,7 +81,7 @@ WorldMapSector::~WorldMapSector()
 }
 
 void
-WorldMapSector::finish_construction(bool)
+WorldMapSector::finish_construction(bool editable)
 {
   flush_game_objects();
 
@@ -95,6 +95,8 @@ WorldMapSector::finish_construction(bool)
     add<DisplayEffect>("Effect");
 
   flush_game_objects();
+
+  Base::Sector::finish_construction(editable);
 }
 
 
@@ -276,42 +278,48 @@ WorldMapSector::update(float dt_sec)
   m_camera->update(dt_sec);
 
   {
-    // check for teleporters
-    auto teleporter = at_object<Teleporter>();
-    if (teleporter && (teleporter->is_automatic() || (m_parent.m_enter_level && (!m_tux->is_moving())))) {
-      m_parent.m_enter_level = false;
-      if (!teleporter->get_worldmap().empty())
-      {
-        // Change worldmap.
-        m_parent.change(teleporter->get_worldmap(), teleporter->get_sector(),
-                        teleporter->get_spawnpoint());
-      }
-      else
-      {
-        // TODO: an animation, camera scrolling or a fading would be a nice touch
-        SoundManager::current()->play("sounds/warp.wav");
-        m_tux->m_back_direction = Direction::NONE;
-        if (!teleporter->get_sector().empty())
+    if(!m_tux->is_moving())
+    {
+      // check for teleporters
+      auto teleporter = at_object<Teleporter>();
+      if (teleporter && (teleporter->is_automatic() || (m_parent.m_enter_level))) {
+        m_parent.m_enter_level = false;
+        if (!teleporter->get_worldmap().empty())
         {
-          // A target sector is set, so teleport to it at the specified spawnpoint.
-          m_parent.set_sector(teleporter->get_sector(), teleporter->get_spawnpoint());
+          // Change worldmap.
+          m_parent.change(teleporter->get_worldmap(), teleporter->get_sector(),
+                          teleporter->get_spawnpoint());
         }
         else
         {
-          // No target sector is set, so teleport at the specified spawnpoint in the current one.
-          move_to_spawnpoint(teleporter->get_spawnpoint(), true);
+          // TODO: an animation, camera scrolling or a fading would be a nice touch
+          SoundManager::current()->play("sounds/warp.wav");
+          m_tux->m_back_direction = Direction::NONE;
+          if (!teleporter->get_sector().empty())
+          {
+            // A target sector is set, so teleport to it at the specified spawnpoint.
+            m_parent.set_sector(teleporter->get_sector(), teleporter->get_spawnpoint());
+          }
+          else
+          {
+            // No target sector is set, so teleport at the specified spawnpoint in the current one.
+            move_to_spawnpoint(teleporter->get_spawnpoint(), true);
+          }
         }
       }
     }
   }
 
   {
-    // check for auto-play levels
-    auto level = at_object<LevelTile>();
-    if (level && level->is_auto_play() && !level->is_solved() && !m_tux->is_moving()) {
-      m_parent.m_enter_level = true;
-      // automatically mark these levels as solved in case player aborts
-      level->set_solved(true);
+    if(!m_tux->is_moving())
+    {
+      // check for auto-play levels
+      auto level = at_object<LevelTile>();
+      if (level && level->is_auto_play() && !level->is_solved()) {
+        m_parent.m_enter_level = true;
+        // automatically mark these levels as solved in case player aborts
+        level->set_solved(true);
+      }
     }
   }
 
@@ -341,7 +349,7 @@ WorldMapSector::update(float dt_sec)
           // update state and savegame
           m_parent.save_state();
           ScreenManager::current()->push_screen(std::make_unique<GameSession>(levelfile, m_parent.m_savegame, &level_->get_statistics()),
-                                                std::make_unique<ShrinkFade>(shrinkpos, 1.0f));
+                                                std::make_unique<ShrinkFade>(shrinkpos, 1.0f, LAYER_LIGHTMAP - 1));
 
           m_parent.m_in_level = true;
         } catch(std::exception& e) {

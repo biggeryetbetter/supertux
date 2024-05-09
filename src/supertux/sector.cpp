@@ -65,11 +65,12 @@ Sector::Sector(Level& parent) :
   m_level(parent),
   m_fully_constructed(false),
   m_foremost_layer(),
+  m_foremost_opaque_layer(),
   m_gravity(10.0f),
-  m_collision_system(new CollisionSystem(*this))
+  m_collision_system(new CollisionSystem(*this)),
+  m_text_object(add<TextObject>("Text"))
 {
   add<DisplayEffect>("Effect");
-  add<TextObject>("Text");
   add<TextArrayObject>("TextArray");
 
   SoundManager::current()->preload("sounds/shoot.wav");
@@ -117,8 +118,20 @@ Sector::finish_construction(bool editable)
     }
   }
 
-  if (get_solid_tilemaps().empty()) {
-    log_warning << "sector '" << get_name() << "' does not contain a solid tile layer." << std::endl;
+  if (get_solid_tilemaps().empty())
+  {
+    if (editable)
+    {
+      log_warning << "sector '" << get_name() << "' does not contain a solid tile layer." << std::endl;
+    }
+    else
+    {
+      log_warning << "sector '" << get_name() << "' does not contain a solid tile layer. Creating an empty one." << std::endl;
+
+      TileMap& tilemap = add<TileMap>(TileManager::current()->get_tileset(m_level.get_tileset()));
+      tilemap.resize(100, 35);
+      tilemap.set_solid();
+    }
   }
 
   if (!get_object_by_type<Camera>()) {
@@ -142,13 +155,12 @@ Sector::finish_construction(bool editable)
   m_initialized = false;
   flush_game_objects();
 
-  m_foremost_layer = calculate_foremost_layer();
+  m_foremost_layer = calculate_foremost_layer(false);
+  m_foremost_opaque_layer = calculate_foremost_layer();
 
   process_resolve_requests();
 
-  for (auto& object : get_objects()) {
-    object->finish_construction();
-  }
+  Base::Sector::finish_construction(editable);
 
   m_initialized = false;
   flush_game_objects();
@@ -156,8 +168,8 @@ Sector::finish_construction(bool editable)
   m_fully_constructed = true;
 }
 
-void
-Sector::activate(const std::string& spawnpoint)
+SpawnPointMarker*
+Sector::get_spawn_point(const std::string& spawnpoint)
 {
   SpawnPointMarker* sp = nullptr;
   for (auto& spawn_point : get_objects_by_type<SpawnPointMarker>()) {
@@ -166,6 +178,24 @@ Sector::activate(const std::string& spawnpoint)
       break;
     }
   }
+
+  return sp;
+}
+
+Vector
+Sector::get_spawn_point_position(const std::string& spawnpoint)
+{
+  SpawnPointMarker* sp = get_spawn_point(spawnpoint);
+  if (sp)
+    return sp->get_pos();
+  else
+    return Vector(0.0f, 0.0f);
+}
+
+void
+Sector::activate(const std::string& spawnpoint)
+{
+  SpawnPointMarker* sp = get_spawn_point(spawnpoint);
 
   if (!sp) {
     if (!m_level.is_worldmap())
@@ -290,14 +320,14 @@ Sector::get_active_region() const
 }
 
 int
-Sector::calculate_foremost_layer() const
+Sector::calculate_foremost_layer(bool including_transparent) const
 {
   int layer = LAYER_BACKGROUND0;
   for (auto& tm : get_objects_by_type<TileMap>())
   {
     if (tm.get_layer() > layer)
     {
-      if ( (tm.get_alpha() < 1.0f) )
+      if ( including_transparent && tm.get_alpha() < 1.0f )
       {
         layer = tm.get_layer() - 1;
       }
@@ -309,6 +339,12 @@ Sector::calculate_foremost_layer() const
   }
   log_debug << "Calculated badguy falling layer was: " << layer << std::endl;
   return layer;
+}
+
+int
+Sector::get_foremost_opaque_layer() const
+{
+  return m_foremost_opaque_layer;
 }
 
 int
@@ -373,7 +409,7 @@ Sector::before_object_add(GameObject& object)
   }
 
   if (m_fully_constructed) {
-    process_resolve_requests();
+    try_process_resolve_requests();
     object.finish_construction();
   }
 
@@ -497,6 +533,13 @@ Sector::is_free_of_movingstatics(const Rectf& rect, const MovingObject* ignore_o
                                                       ignore_object ? ignore_object->get_collision_object() : nullptr);
 }
 
+bool
+Sector::is_free_of_specifically_movingstatics(const Rectf& rect, const MovingObject* ignore_object) const
+{
+  return m_collision_system->is_free_of_specifically_movingstatics(rect,
+                                                      ignore_object ? ignore_object->get_collision_object() : nullptr);
+}
+
 CollisionSystem::RaycastResult
 Sector::get_first_line_intersection(const Vector& line_start,
                                     const Vector& line_end,
@@ -568,18 +611,33 @@ Sector::resize_sector(const Size& old_size, const Size& new_size, const Size& re
   bool is_offset = resize_offset.width || resize_offset.height;
   Vector obj_shift = Vector(static_cast<float>(resize_offset.width) * 32.0f,
                             static_cast<float>(resize_offset.height) * 32.0f);
-  for (const auto& object : get_objects()) {
+
+  for (const auto& object : get_objects())
+  {
     auto tilemap = dynamic_cast<TileMap*>(object.get());
-    if (tilemap) {
-      if (tilemap->get_size() == old_size) {
+    if (tilemap)
+    {
+      if (tilemap->get_size() == old_size)
+      {
+        tilemap->save_state();
         tilemap->resize(new_size, resize_offset);
-      } else if (is_offset) {
-        tilemap->move_by(obj_shift);
+        tilemap->check_state();
       }
-    } else if (is_offset) {
+      else if (is_offset)
+      {
+        tilemap->save_state();
+        tilemap->move_by(obj_shift);
+        tilemap->check_state();
+      }
+    }
+    else if (is_offset)
+    {
       auto moving_object = dynamic_cast<MovingObject*>(object.get());
-      if (moving_object) {
+      if (moving_object)
+      {
+        moving_object->save_state();
         moving_object->move_to(moving_object->get_pos() + obj_shift);
+        moving_object->check_state();
       }
     }
   }

@@ -44,6 +44,8 @@ class Player;
 class ReaderMapping;
 class Rectf;
 class Size;
+class SpawnPointMarker;
+class TextObject;
 class TileMap;
 class Writer;
 
@@ -109,6 +111,10 @@ public:
       This includes badguys and players. */
   bool is_free_of_movingstatics(const Rectf& rect, const MovingObject* ignore_object = nullptr) const;
 
+  /** Checks if the specified rectangle is free of MovingObjects in COLGROUP_MOVINGSTATIC.
+      Note that this does not include moving badguys, or players */
+  bool is_free_of_specifically_movingstatics(const Rectf& rect, const MovingObject* ignore_object = nullptr) const;
+
   CollisionSystem::RaycastResult get_first_line_intersection(const Vector& line_start,
                                                              const Vector& line_end,
                                                              bool ignore_objects,
@@ -125,6 +131,7 @@ public:
 
   Rectf get_active_region() const;
 
+  int get_foremost_opaque_layer() const;
   int get_foremost_layer() const;
 
   /** returns the editor size (in tiles) of a sector */
@@ -143,6 +150,9 @@ public:
   Camera& get_camera() const;
   std::vector<Player*> get_players() const;
   DisplayEffect& get_effect() const;
+  TextObject& get_text_object() const { return m_text_object; }
+
+  Vector get_spawn_point_position(const std::string& spawnpoint);
 
 private:
   uint32_t collision_tile_attributes(const Rectf& dest, const Vector& mov) const;
@@ -150,21 +160,26 @@ private:
   virtual bool before_object_add(GameObject& object) override;
   virtual void before_object_remove(GameObject& object) override;
 
-  int calculate_foremost_layer() const;
+  int calculate_foremost_layer(bool including_transparent = true) const;
 
   /** Convert tiles into their corresponding GameObjects (e.g.
       bonusblocks, add light to lava tiles) */
   void convert_tiles2gameobject();
+
+  SpawnPointMarker* get_spawn_point(const std::string& spawnpoint);
 
 private:
   Level& m_level; // Parent level
 
   bool m_fully_constructed;
   int m_foremost_layer;
+  int m_foremost_opaque_layer;
 
   float m_gravity;
 
   std::unique_ptr<CollisionSystem> m_collision_system;
+
+  TextObject& m_text_object;
 
 private:
   Sector(const Sector&) = delete;

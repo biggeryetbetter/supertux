@@ -43,7 +43,7 @@ public:
   WorldMapSector(WorldMap& parent);
   ~WorldMapSector() override;
 
-  void finish_construction(bool) override;
+  void finish_construction(bool editable) override;
 
   void setup();
   void leave();
@@ -81,11 +81,7 @@ public:
   template<class T>
   T* at_object() const
   {
-    for (auto& obj : get_objects_by_type<T>())
-      if (obj.get_tile_pos() == m_tux->get_tile_pos())
-        return &obj;
-
-    return nullptr;
+    return at_object<T>(m_tux->get_tile_pos());
   }
   template<class T>
   T* at_object(const Vector& pos) const
