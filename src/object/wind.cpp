@@ -16,6 +16,9 @@
 
 #include "object/wind.hpp"
 
+#include <simplesquirrel/class.hpp>
+#include <simplesquirrel/vm.hpp>
+
 #include "badguy/badguy.hpp"
 #include "badguy/dive_mine.hpp"
 #include "editor/editor.hpp"
@@ -33,7 +36,6 @@
 
 Wind::Wind(const ReaderMapping& reader) :
   MovingObject(reader),
-  ExposedObject<Wind, scripting::Wind>(this),
   blowing(),
   speed(0.0f, 0.0f),
   acceleration(),
@@ -212,6 +214,15 @@ Wind::get_wind_strength(Vector pos) {
   strength = std::clamp(std::min({dl, dr, dt, db}) / feather_distance, 0.f, 1.f);
 
   return strength;
+}
+
+void
+Wind::register_class(ssq::VM& vm)
+{
+  ssq::Class cls = vm.addAbstractClass<Wind>("Wind", vm.findClass("MovingObject"));
+
+  cls.addFunc("start", &Wind::start);
+  cls.addFunc("stop", &Wind::stop);
 }
 
 /* EOF */
