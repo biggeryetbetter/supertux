@@ -63,6 +63,10 @@ public:
       state and calls active_update and inactive_update */
   virtual void update(float dt_sec) override;
 
+  /** Called each frame during active_update. Applies velocity from
+   *  wind if the badguy is inside wind and resets it if not. */
+  virtual void handle_wind();
+
   static std::string class_name() { return "badguy"; }
   virtual std::string get_class_name() const override { return class_name(); }
   virtual std::string get_exposed_class_name() const override { return "BadGuy"; }

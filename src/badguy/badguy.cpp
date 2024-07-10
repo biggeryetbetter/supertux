@@ -386,10 +386,7 @@ BadGuy::get_allowed_directions() const
 void
 BadGuy::active_update(float dt_sec)
 {
-  if (m_col.m_colliding_wind.empty()) {
-    m_wind_velocity = Vector(0.f, 0.f);
-    m_wind_acceleration = 0.0;
-  }
+  handle_wind();
 
   if (!is_grabbed())
   {
@@ -409,6 +406,22 @@ BadGuy::active_update(float dt_sec)
 
   if (m_frozen) {
     m_sprite->stop_animation();
+  }
+}
+
+void
+BadGuy::handle_wind()
+{
+  if (!m_col.m_colliding_wind.empty())
+  {
+    if (on_ground() && m_wind_velocity.y > 0.f)
+      m_wind_velocity.y = 0.f;
+
+    m_physic.set_velocity(m_physic.get_velocity() + m_wind_velocity);
+  }
+  else {
+    m_wind_velocity = Vector(0.f, 0.f);
+    m_wind_acceleration = 0.0;
   }
 }
 
