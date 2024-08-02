@@ -20,7 +20,8 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - src/*
+      - src/**
+      - tools/scripting_docs_gen/**
   workflow_dispatch:
 
 jobs:

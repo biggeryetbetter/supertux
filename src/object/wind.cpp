@@ -45,7 +45,8 @@ Wind::Wind(const ReaderMapping& reader) :
   affects_badguys(),
   affects_objects(),
   affects_player(),
-  fancy_wind()
+  fancy_wind(true),
+  particles_enabled(true)
 {
   float w,h;
   parse_type(reader);
@@ -67,7 +68,8 @@ Wind::Wind(const ReaderMapping& reader) :
   reader.get("affects-objects", affects_objects, false);
   reader.get("affects-player", affects_player, true);
   
-  reader.get("fancy-wind", fancy_wind, false);
+  reader.get("fancy-wind", fancy_wind, true);
+  reader.get("particles-enabled", particles_enabled, true);
 
   set_group(COLGROUP_TOUCHABLE);
 }
@@ -80,8 +82,6 @@ Wind::get_settings()
 
   ObjectSettings result = MovingObject::get_settings();
 
-  //result.add_float("width", &new_size.x, "width", OPTION_HIDDEN);
-  //result.add_float("height", &new_size.y, "height", OPTION_HIDDEN);
   result.add_float(_("Speed X"), &speed.x, "speed-x");
   result.add_float(_("Speed Y"), &speed.y, "speed-y");
   result.add_float(_("Acceleration"), &acceleration, "acceleration");
@@ -90,9 +90,10 @@ Wind::get_settings()
   result.add_bool(_("Affects Badguys"), &affects_badguys, "affects-badguys", false);
   result.add_bool(_("Affects Objects"), &affects_objects, "affects-objects", false);
   result.add_bool(_("Affects Player"), &affects_player, "affects-player");
-  result.add_bool(_("Fancy Particles"), &fancy_wind, "fancy-wind", false);
+  result.add_bool(_("Fancy Particles"), &fancy_wind, "fancy-wind", true);
+  result.add_bool(_("Particles Enabled"), &particles_enabled, "particles-enabled", true);
 
-  result.reorder({"blowing", "speed-x", "speed-y", "acceleration", "feather-distance", "affects-badguys", "affects-objects", "affects-player", "fancy-wind", "region", "name", "x", "y"});
+  result.reorder({ "blowing", "speed-x", "speed-y", "acceleration", "feather-distance", "affects-badguys", "affects-objects", "affects-player", "fancy-wind", "particles-enabled", "region", "name", "x", "y" });
 
   return result;
 }
@@ -110,17 +111,17 @@ Wind::update(float dt_sec_)
 {
   dt_sec = dt_sec_;
 
-  if (!blowing) return;
+  if (!blowing || !particles_enabled) return;
   if (m_col.m_bbox.get_width() <= 16 || m_col.m_bbox.get_height() <= 16) return;
 
-  Vector ppos = Vector(graphicsRandom.randf(m_col.m_bbox.get_left()+8, m_col.m_bbox.get_right()-8), graphicsRandom.randf(m_col.m_bbox.get_top()+8, m_col.m_bbox.get_bottom()-8));
-  Vector pspeed = Vector(graphicsRandom.randf(speed.x-20, speed.x+20), graphicsRandom.randf(speed.y-20, speed.y+20));
+  Vector ppos = Vector(graphicsRandom.randf(m_col.m_bbox.get_left() + 8, m_col.m_bbox.get_right() - 8), graphicsRandom.randf(m_col.m_bbox.get_top() + 8, m_col.m_bbox.get_bottom() - 8));
+  Vector pspeed = Vector(graphicsRandom.randf(speed.x - 20, speed.x + 20), graphicsRandom.randf(speed.y - 20, speed.y + 20));
 
   // TODO: Rotate sprite rather than just use 2 different actions
   // Approx. 1 particle per tile
   if (graphicsRandom.randf(0.f, 100.f) < (m_col.m_bbox.get_width() / 32.f) * (m_col.m_bbox.get_height() / 32.f))
   {
-    // emit a particle
+    // Emit a particle
 	  if (fancy_wind)
     {
       switch (m_type) {

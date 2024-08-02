@@ -42,7 +42,9 @@ static const std::unordered_map<std::string, std::string> s_simplified_types = {
   { "unsigned long long", "int" },
   { "double", "float" },
   { "std::string", "string" },
-  { "std::wstring", "string" }
+  { "std::wstring", "string" },
+  { "const std::string &", "string" },
+  { "const std::wstring &", "string" }
 };
 
 static void parse_base_classes(tinyxml2::XMLElement* p_inheritancenode, tinyxml2::XMLElement* p_inheritancegraph, Class::BaseClasses& list)
@@ -418,8 +420,6 @@ void parse_xrefsect_desc(tinyxml2::XMLElement* p_xrefsect, std::string& dest)
     XMLTextReader read(dest);
     p_xrefsectdescpara->Accept(&read);
   }
-
-  if (!dest.empty()) dest.pop_back(); // Remove space, added at the end
 }
 
 } // namespace Parser
