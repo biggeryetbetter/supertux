@@ -140,7 +140,6 @@ const float STONE_UP_ACCELERATION = 400.f;
 /* Swim variables */
 const float SWIM_SPEED = 300.f;
 const float SWIM_BOOST_SPEED = 600.f;
-const float SWIM_ACCEL_POWER = 0.4f;
 const float TURN_MAGNITUDE = 0.15f;
 const float TURN_MAGNITUDE_BOOST = 0.2f;
 
@@ -955,27 +954,18 @@ Player::swim(float pointx, float pointy, bool boost)
         if (std::abs(delta) < 0.01f)
           m_swimming_angle = pointed_angle;
 
-        Vector swimming_direction = math::vec2_from_polar(m_swimming_accel_modifier, pointed_angle);
-        Vector diff = m_physic.get_velocity() - swimming_direction;
-        float diff_len = glm::length(diff);
-
-        Vector acceleration = Vector(
-          (-diff.x * pow(1.f/std::max(1.f, diff_len), SWIM_ACCEL_POWER)),
-          (-diff.y * pow(1.f/std::max(1.f, diff_len), SWIM_ACCEL_POWER))
-        );
-
-        acceleration.x = std::clamp(acceleration.x, -m_swimming_accel_modifier, m_swimming_accel_modifier);
-        acceleration.y = std::clamp(acceleration.y, -m_swimming_accel_modifier, m_swimming_accel_modifier);
-
+        Vector acceleration = math::vec2_from_polar(m_swimming_accel_modifier, pointed_angle);
+       
         // Prevent backwards acceleration, i.e. Tux slowing himself down when he is already going faster
         // than his swimming speed.
-        if (vx * pointx > swimming_direction.x * pointx)
+        if (vx * pointx > acceleration.x * pointx)
           acceleration.x = 0;
-        if (vy * pointy > swimming_direction.y * pointy)
+        if (vy * pointy > acceleration.y * pointy)
           acceleration.y = 0;
 
-
-        m_physic.set_velocity(m_physic.get_velocity() + acceleration);
+        m_physic.set_acceleration(acceleration);
+      } else {
+        m_physic.set_acceleration(Vector(0.f));
       }
 
       apply_friction();
@@ -1042,7 +1032,7 @@ Player::apply_friction()
 {
   bool is_on_ground = on_ground();
   float velx = m_physic.get_velocity_x();
-  float vely = m_physic.get_velocity_y();
+
   if (is_on_ground && (fabsf(velx) < (m_stone ? 5.f : WALK_SPEED))) {
     m_physic.set_velocity_x(0);
     m_physic.set_acceleration_x(0);
@@ -1060,17 +1050,25 @@ Player::apply_friction()
   if (!is_on_ground && !m_col.m_colliding_wind.empty() && std::abs(m_wind_velocity.x) > 0.f)
     friction = 0.f;
 
-  if (velx < 0) {
-    m_physic.set_acceleration_x(friction);
-  } else if (velx > 0) {
-    m_physic.set_acceleration_x(-friction);
-  } // no friction for physic.get_velocity_x() == 0
+  if (m_swimming)
+  {
+    if (glm::length(m_wind_velocity) == 0.f) {
+      // Friction factor in water is how similar Tux's swimming direction is to his actual direction,
+      // mapped between 0.95 and 0.99. Tux is more aerodynamic going forwards than backwards.
+      Vector swimming_direction = math::vec2_from_polar(1.f, m_swimming_angle);
+      Vector fac = swimming_direction - glm::normalize(m_physic.get_velocity());
 
-  if (m_swimming) {
-    if (vely < 0)
-      m_physic.set_acceleration_y(friction);
-    else if (vely > 0)
-      m_physic.set_acceleration_y(-friction);
+      fac = Vector(0.99f) - glm::abs(fac) / 2.0f * 0.04;
+
+      m_physic.set_velocity(m_physic.get_velocity() * fac);
+    }
+  } else
+  {
+    if (velx < 0) {
+      m_physic.set_acceleration_x(friction);
+    } else if (velx > 0) {
+      m_physic.set_acceleration_x(-friction);
+    } // no friction for physic.get_velocity_x() == 0
   }
 }
 
