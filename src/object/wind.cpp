@@ -158,7 +158,10 @@ Wind::collision(GameObject& other, const CollisionHit& )
   if (player && affects_player)
   {
     player->override_velocity();
-    player->add_wind_velocity(acceleration * get_wind_strength(player->get_bbox().get_middle()), speed, dt_sec);
+    player->get_physic().set_wind_acceleration(
+      this->acceleration * get_wind_strength(player->get_bbox().get_middle())
+    );
+    player->get_physic().set_wind_velocity(this->speed);
   }
 
   auto badguy = dynamic_cast<BadGuy*>(&other);
@@ -167,13 +170,19 @@ Wind::collision(GameObject& other, const CollisionHit& )
     if (m_type == CURRENT && dynamic_cast<DiveMine*>(badguy)) { // Dive mines are not affected by currents
       return ABORT_MOVE;
     }
-    badguy->add_wind_velocity(acceleration * get_wind_strength(badguy->get_bbox().get_middle()), speed, dt_sec);
+    badguy->get_physic().set_wind_acceleration(
+      this->acceleration * get_wind_strength(badguy->get_bbox().get_middle())
+    );
+    badguy->get_physic().set_wind_velocity(this->speed);
   }
 
   auto rock = dynamic_cast<Rock*>(&other);
   if (rock && affects_objects)
   {
-    rock->add_wind_velocity(acceleration * get_wind_strength(rock->get_bbox().get_middle()), speed, dt_sec);
+    rock->get_physic().set_wind_acceleration(
+      this->acceleration * get_wind_strength(rock->get_bbox().get_middle())
+    );
+    rock->get_physic().set_wind_velocity(this->speed);
   }
 
   return ABORT_MOVE;

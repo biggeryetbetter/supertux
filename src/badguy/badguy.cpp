@@ -54,8 +54,6 @@ BadGuy::BadGuy(const Vector& pos, Direction direction, const std::string& sprite
                const std::string& light_sprite_name, const std::string& ice_sprite_name) :
   MovingSprite(pos, sprite_name, layer, COLGROUP_DISABLED),
   m_physic(),
-  m_wind_velocity(),
-  m_wind_acceleration(0.f),
   m_countMe(true),
   m_is_initialized(false),
   m_start_position(m_col.m_bbox.p1()),
@@ -99,8 +97,6 @@ BadGuy::BadGuy(const ReaderMapping& reader, const std::string& sprite_name,
                const std::string& light_sprite_name, const std::string& ice_sprite_name) :
   MovingSprite(reader, sprite_name, layer, COLGROUP_DISABLED),
   m_physic(),
-  m_wind_velocity(),
-  m_wind_acceleration(0.f),
   m_countMe(true),
   m_is_initialized(false),
   m_start_position(m_col.m_bbox.p1()),
@@ -414,14 +410,12 @@ BadGuy::handle_wind()
 {
   if (!m_col.m_colliding_wind.empty())
   {
-    if (on_ground() && m_wind_velocity.y > 0.f)
-      m_wind_velocity.y = 0.f;
-
-    m_physic.set_velocity(m_physic.get_velocity() + m_wind_velocity);
+    if (on_ground() && m_physic.get_wind_velocity_y() > 0.f)
+      m_physic.set_wind_velocity_y(0.f);
   }
   else {
-    m_wind_velocity = Vector(0.f, 0.f);
-    m_wind_acceleration = 0.0;
+    m_physic.set_wind_velocity(Vector(0.f));
+    m_physic.set_wind_acceleration(0.0);
   }
 }
 
@@ -1208,29 +1202,6 @@ BadGuy::can_be_affected_by_wind() const
 {
   return true;
 }
-
-void
-BadGuy::add_wind_velocity(const float acceleration, const Vector& end_speed, const float dt_sec)
-{
-  Vector adjusted_end_speed = glm::normalize(end_speed) * acceleration;
-
-  Vector vec_acceleration = adjusted_end_speed * dt_sec;
-
-  m_wind_acceleration = acceleration;
-  Vector end_velocity = Vector(0.f, 0.f);
-  // Only add velocity in the same direction as the wind.
-  if (adjusted_end_speed.x > 0 && m_physic.get_velocity_x() + m_wind_velocity.x < end_speed.x)
-    end_velocity.x = std::min(vec_acceleration.x, adjusted_end_speed.x);
-  if (adjusted_end_speed.x < 0 && m_physic.get_velocity_x() + m_wind_velocity.x > end_speed.x)
-    end_velocity.x = std::max(vec_acceleration.x, adjusted_end_speed.x);
-  if (adjusted_end_speed.y > 0 && m_physic.get_velocity_y() + m_wind_velocity.y < end_speed.y)
-    end_velocity.y = std::min(vec_acceleration.y, adjusted_end_speed.y);
-  if (adjusted_end_speed.y < 0 && m_physic.get_velocity_y() + m_wind_velocity.y > end_speed.y)
-    end_velocity.y = std::max(vec_acceleration.y, adjusted_end_speed.y);
-
-  m_wind_velocity = glm::lerp(m_wind_velocity, end_velocity, 0.5f);
-}
-
 
 void
 BadGuy::register_class(ssq::VM& vm)

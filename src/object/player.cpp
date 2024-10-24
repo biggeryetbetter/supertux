@@ -218,8 +218,6 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   m_growing(false),
   m_backflip_timer(),
   m_physic(),
-  m_wind_velocity(),
-  m_wind_acceleration(),
   m_visible(true),
   m_grabbed_object(nullptr),
   m_grabbed_object_remove_listener(new GrabListener(*this)),
@@ -396,8 +394,8 @@ void
 Player::update(float dt_sec)
 {
   if (m_col.m_colliding_wind.empty()) {
-    m_wind_velocity = Vector(0.f, 0.f);
-    m_wind_acceleration = 0.0;
+    m_physic.set_wind_acceleration(0);
+    m_physic.set_wind_velocity(0, 0);
   }
 
   if (is_dead() || Sector::get().get_object_count<Player>() == 1)
@@ -571,12 +569,6 @@ Player::update(float dt_sec)
   if (!m_dying && !m_deactivated)
     handle_input();
 
-  if (!m_col.m_colliding_wind.empty()) {
-    if (on_ground() && m_wind_velocity.y > 0.f)
-      m_wind_velocity.y = 0.f;
-
-    m_physic.set_velocity(m_physic.get_velocity() + m_wind_velocity);
-  }
   /*
   // handle_input() calls apply_friction() when Tux is not walking, so we'll have to do this ourselves
   if (deactivated)
@@ -1112,22 +1104,16 @@ Player::apply_friction()
   else
     friction *= (NORMAL_FRICTION_MULTIPLIER*(m_sliding ? 0.8f : m_stone ? 0.4f : 1.f));
 
-  // Air friction does not make sense when the air is moving with you!
-  if (!is_on_ground && !m_col.m_colliding_wind.empty() && std::abs(m_wind_velocity.x) > 0.f)
-    friction = 0.f;
-
   if (m_swimming)
   {
-    if (glm::length(m_wind_velocity) == 0.f) {
-      // Friction factor in water is how similar Tux's swimming direction is to his actual direction,
-      // mapped between 0.95 and 0.99. Tux is more aerodynamic going forwards than backwards.
-      Vector swimming_direction = math::vec2_from_polar(1.f, m_swimming_angle);
-      Vector fac = swimming_direction - glm::normalize(m_physic.get_velocity());
+    // Friction factor in water is how similar Tux's swimming direction is to his actual direction,
+    // mapped between 0.95 and 0.99. Tux is more aerodynamic going forwards than backwards.
+    Vector swimming_direction = math::vec2_from_polar(1.f, m_swimming_angle);
+    Vector fac = swimming_direction - glm::normalize(m_physic.get_velocity());
 
-      fac = Vector(0.99f) - glm::abs(fac) / 2.0f * 0.04;
+    fac = Vector(0.99f) - glm::abs(fac) / 2.0f * 0.04;
 
-      m_physic.set_velocity(m_physic.get_velocity() * fac);
-    }
+    m_physic.set_velocity(m_physic.get_velocity() * fac);
   } else
   {
     if (velx < 0) {
@@ -3081,28 +3067,6 @@ Player::remove_collected_key(Key* key)
                                      m_collected_keys.end(),
                                      key),
                          m_collected_keys.end());
-}
-
-void
-Player::add_wind_velocity(const float acceleration, const Vector& end_speed, const float dt_sec)
-{
-  Vector adjusted_end_speed = glm::normalize(end_speed) * acceleration;
-
-  Vector vec_acceleration = adjusted_end_speed * dt_sec;
-
-  m_wind_acceleration = acceleration;
-  Vector end_velocity = Vector(0.f, 0.f);
-  // Only add velocity in the same direction as the wind.
-  if (adjusted_end_speed.x > 0 && m_physic.get_velocity_x() + m_wind_velocity.x < end_speed.x)
-    end_velocity.x = std::min(vec_acceleration.x, adjusted_end_speed.x);
-  if (adjusted_end_speed.x < 0 && m_physic.get_velocity_x() + m_wind_velocity.x > end_speed.x)
-    end_velocity.x = std::max(vec_acceleration.x, adjusted_end_speed.x);
-  if (adjusted_end_speed.y > 0 && m_physic.get_velocity_y() + m_wind_velocity.y < end_speed.y)
-    end_velocity.y = std::min(vec_acceleration.y, adjusted_end_speed.y);
-  if (adjusted_end_speed.y < 0 && m_physic.get_velocity_y() + m_wind_velocity.y > end_speed.y)
-    end_velocity.y = std::max(vec_acceleration.y, adjusted_end_speed.y);
-
-  m_wind_velocity = glm::lerp(m_wind_velocity, end_velocity, 0.5f);
 }
 
 void
