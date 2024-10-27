@@ -28,6 +28,9 @@
 #include "video/layer.hpp"
 #include "video/surface_ptr.hpp"
 
+#include <array>
+#include <list>
+
 class BadGuy;
 class Climbable;
 class Controller;
@@ -134,6 +137,18 @@ public:
 
   bool is_invincible() const { return m_invincible_timer.started(); }
   bool is_dying() const { return m_dying; }
+
+  /**
+   * Returns true if the player is currently alive 
+   * (not dying or dead)
+   */
+  bool is_alive() const { return !is_dying() && !is_dead(); }
+  
+  /**
+   * Returns true if the player can be controlled.
+   * (alive and not currently in a win sequence)
+   */
+  bool is_active() const { return is_alive() && !is_winning(); }
 
   Direction peeking_direction_x() const { return m_peekingX; }
   Direction peeking_direction_y() const { return m_peekingY; }
@@ -286,14 +301,12 @@ public:
 
   /**
    * @scripting
-   * @deprecated
    * @description Set Tux visible or invisible.
    * @param bool $visible
    */
   void set_visible(bool visible);
   /**
    * @scripting
-   * @deprecated
    * @description Returns ""true"" if Tux is currently visible (has not been set invisible by the ""set_visible()"" method).
    */
   bool get_visible() const;
@@ -538,6 +551,11 @@ private:
   Timer m_backflip_timer;
 
   Physic m_physic;
+
+  /**
+   * @scripting
+   * @description Determines whether Tux is visible.
+   */
   bool m_visible;
 
   Portable* m_grabbed_object;
@@ -551,6 +569,10 @@ private:
   bool m_water_jump;
 
   SurfacePtr m_airarrow; /**< arrow indicating Tux' position when he's above the camera */
+
+  SpritePtr m_bubbles_sprite; /**< bubble particles sprite for swimming */
+  Timer m_bubble_timer; /**< timer for spawning bubble particles */
+  std::list<std::pair<SpritePtr, Vector>> m_active_bubbles; /**< active bubble particles */
 
   Vector m_floor_normal;
 

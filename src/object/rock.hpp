@@ -44,6 +44,7 @@ public:
   virtual ObjectSettings get_settings() override;
   virtual GameObjectTypes get_types() const override;
   std::string get_default_sprite_name() const override;
+  void draw(DrawingContext& context) override;
 
   Physic& get_physic() { return m_physic; }
 

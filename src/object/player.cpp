@@ -148,6 +148,7 @@ const float SWIM_SPEED = 300.f;
 const float SWIM_BOOST_SPEED = 600.f;
 const float TURN_MAGNITUDE = 0.15f;
 const float TURN_MAGNITUDE_BOOST = 0.2f;
+const std::array<std::string, 2> BUBBLE_ACTIONS = { "normal", "small" };
 
 /* Buttjump variables */
 
@@ -230,6 +231,7 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   m_swimming_accel_modifier(100.f),
   m_water_jump(false),
   m_airarrow(Surface::from_file("images/engine/hud/airarrow.png")),
+  m_bubbles_sprite(SpriteManager::current()->create("images/particles/air_bubble.sprite")),
   m_floor_normal(0.0f, 0.0f),
   m_ghost_mode(false),
   m_unduck_hurt_timer(),
@@ -258,6 +260,8 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   SoundManager::current()->preload("sounds/invincible_start.ogg");
   SoundManager::current()->preload("sounds/splash.wav");
   SoundManager::current()->preload("sounds/grow.wav");
+  m_bubble_timer.start(3.0f + graphicsRandom.randf(2));
+
   m_col.set_size(TUX_WIDTH, is_big() ? BIG_TUX_HEIGHT : SMALL_TUX_HEIGHT);
 
   m_sprite->set_angle(0.0f);
@@ -421,11 +425,28 @@ Player::update(float dt_sec)
     }
   }
 
+  if (!m_active_bubbles.empty())
+  {
+    for (auto& bubble : m_active_bubbles)
+    {
+      bubble.second.y -= dt_sec * 40.0f;
+      bubble.second.x += std::sin(bubble.second.y * 0.1f) * dt_sec * 5.0f;
+    }
+
+    m_active_bubbles.remove_if([&](const std::pair<SpritePtr, Vector>& bubble)
+      {
+        Rectf bubble_box(bubble.second.x, bubble.second.y, bubble.second.x + 16.f, bubble.second.y + 16.f);
+        bool is_out_of_water = Sector::get().is_free_of_tiles(bubble_box, true, Tile::WATER);
+        bool hits_solid = !Sector::get().is_free_of_tiles(bubble_box, false, Tile::SOLID);
+        return is_out_of_water || hits_solid;
+      });
+  }
+
   // Skip if in multiplayer respawn
-  if (is_dead() && m_target && Sector::get().get_object_count<Player>([this](const Player& p) { return !p.is_dead() && !p.is_dying() && !p.is_winning() && &p != this; }))
+  if (is_dead() && m_target && Sector::get().get_object_count<Player>([this](const Player& p) { return p.is_active() && &p != this; }))
   {
     auto* target = Sector::get().get_object_by_uid<Player>(*m_target);
-    if (!target || target->is_dying() || target->is_dead() || target->is_winning())
+    if (!target || !target->is_active())
     {
       next_target();
     }
@@ -489,7 +510,7 @@ Player::update(float dt_sec)
         adjust_height(BIG_TUX_HEIGHT, 10.f);
         do_duck();
       }
-      else if (!is_big() || m_stone)
+      else if (!is_big() || (m_stone && !m_growing))
       {
         adjust_height(SMALL_TUX_HEIGHT);
       }
@@ -523,6 +544,71 @@ Player::update(float dt_sec)
         if (m_physic.get_velocity_y() > -350.f && m_controller->hold(Control::UP))
           m_physic.set_velocity_y(-350.f);
       }
+
+      if (m_bubble_timer.check())
+      {
+        Vector beak_local_offset(30.f, 0.0f);
+        float big_offset_x = is_big() ? 4.0f : 0.0f;
+
+        // Calculate the offsets based on the sprite angle
+        float offset_x = std::cos(m_swimming_angle) * 10.0f;
+        float offset_y = std::sin(m_swimming_angle) * 10.0f;
+
+        // Rotate the beak offset based on the sprite's angle
+        float rotated_beak_offset_x = beak_local_offset.x * std::cos(m_swimming_angle) - beak_local_offset.y * std::sin(m_swimming_angle);
+        float rotated_beak_offset_y = beak_local_offset.x * std::sin(m_swimming_angle) + beak_local_offset.y * std::cos(m_swimming_angle);
+
+        Vector player_center = m_col.m_bbox.get_middle();
+        Vector beak_position;
+
+        // Determine direction based on the radians
+        if (std::abs(m_swimming_angle) > static_cast<float>(math::PI_2)) // Facing left
+        {
+          beak_position = player_center + Vector(rotated_beak_offset_x - big_offset_x * 2, rotated_beak_offset_y);
+        }
+        else // Facing right (including straight up or down)
+        {
+          beak_position = player_center + Vector(rotated_beak_offset_x - 4.0f + big_offset_x, rotated_beak_offset_y);
+        }
+
+        int num_bubbles = graphicsRandom.rand(1, 3);
+
+        for (int i = 0; i < num_bubbles; ++i)
+        {
+          int random_action_index = graphicsRandom.rand(0, 2);
+          std::string selected_action = BUBBLE_ACTIONS[random_action_index];
+
+          SpritePtr bubble_sprite = m_bubbles_sprite->clone();
+          bubble_sprite->set_animation_loops(1);
+          bubble_sprite->set_action(selected_action);
+
+          Vector bubble_pos(0.f, 0.f);
+          if (std::abs(m_swimming_angle) > static_cast<float>(math::PI_2)) // Facing left
+          {
+            bubble_pos = beak_position + Vector(offset_x - big_offset_x * 2, offset_y);
+          }
+          else // Facing right (including straight up or down)
+          {
+            bubble_pos = beak_position + Vector(offset_x - 4.0f + big_offset_x, offset_y);
+          }
+
+          if (num_bubbles > 1)
+          {
+            float burst_offset_x = graphicsRandom.randf(-5.0f, 5.0f);
+            float burst_offset_y = graphicsRandom.randf(-5.0f, 5.0f);
+            bubble_pos.x += burst_offset_x;
+            bubble_pos.y += burst_offset_y;
+          }
+
+          if (bubble_pos.y > -1)
+          {
+            m_active_bubbles.emplace_back(std::make_pair(std::move(bubble_sprite), bubble_pos));
+          }
+        }
+
+        // Restart the timer for the next wave of bubbles
+        m_bubble_timer.start(0.8f + graphicsRandom.randf(0.0f, 0.6f));
+      }
     }
     else
     {
@@ -555,7 +641,7 @@ Player::update(float dt_sec)
     set_bonus(NO_BONUS, true);
     m_dead = true;
 
-    if (!Sector::get().get_object_count<Player>([](const Player& p) { return !p.is_dead() && !p.is_dying(); }))
+    if (!Sector::get().get_object_count<Player>([](const Player& p) { return p.is_alive(); }))
     {
       Sector::get().stop_looping_sounds();
     }
@@ -612,8 +698,8 @@ Player::update(float dt_sec)
 
   //End of wallclinging
 
-  // Roll the sprite if Tux is rolling
-  if (m_stone)
+  // Roll the sprite if Tux is rolling (and not growing)
+  if (m_stone && !m_growing)
   {
     float f = 1.f;
 
@@ -733,7 +819,8 @@ Player::update(float dt_sec)
   }
 
   if (m_growing) {
-    if (m_sprite->animation_done()) m_growing = false;
+    if (m_sprite->animation_done())
+      m_growing = false;
   }
 
   // when climbing animate only while moving
@@ -815,19 +902,19 @@ Player::update(float dt_sec)
 
     //if you stop holding down when sliding, then it stops.
     //or, stop sliding if you come to a stop and are not on a slope.
-    if (!m_controller->hold(Control::DOWN) ||
-      (m_floor_normal.y == 0.f && std::abs(m_physic.get_velocity_x()) <= 1.f))
+    if (!m_controller->hold(Control::DOWN))
     {
-      if (is_big())
-      {
-        if (m_controller->hold(Control::LEFT) || m_controller->hold(Control::RIGHT)) {
-          m_crawl = true;
-        }
-        m_duck = true;
-      }
       m_sliding = false;
       m_slidejumping = false;
-      m_was_crawling_before_slide = false;
+
+      do_standup(false);
+    }
+    else if (m_floor_normal.y == 0.f && std::abs(m_physic.get_velocity_x()) <= 1.f)
+    {
+      if (is_big() || m_growing)
+          m_crawl = true;
+      m_sliding = false;
+      m_slidejumping = false;
     }
   }
 
@@ -1397,7 +1484,7 @@ Player::handle_vertical_input()
   if (m_controller->pressed(Control::JUMP)) m_jump_button_timer.start(JUMP_GRACE_TIME);
   if (m_controller->hold(Control::JUMP) && m_jump_button_timer.started() && (m_can_jump || m_coyote_timer.started())) {
     m_jump_button_timer.stop();
-    if (m_duck) {
+    if (m_duck && !m_sliding) {
       // when running, only jump a little bit; else do a backflip
       if ((m_physic.get_velocity_x() != 0) ||
           (m_controller->hold(Control::LEFT)) ||
@@ -1592,7 +1679,7 @@ Player::handle_input()
   }
 
   /* Turn to Stone */
-  if (m_controller->hold(Control::DOWN) && !m_does_buttjump && m_coyote_timer.started() && !m_swimming && (std::abs(m_physic.get_velocity_x()) > 150.f) && get_bonus() == EARTH_BONUS) {
+  if (m_controller->hold(Control::DOWN) && !m_does_buttjump && m_coyote_timer.started() && !m_swimming && (std::abs(m_physic.get_velocity_x()) > 150.f) && get_bonus() == EARTH_BONUS && !m_growing) {
     m_physic.set_gravity_modifier(1.0f); // Undo jump_early_apex
     adjust_height(TUX_WIDTH);
     m_stone = true;
@@ -1607,11 +1694,11 @@ Player::handle_input()
     apply_friction();
 
   /* Duck or Standup! */
-  if ((m_controller->pressed(Control::DOWN) || ((m_duck || m_wants_buttjump) && m_controller->hold(Control::DOWN))) &&
-    !m_swimming && !m_sliding && !m_stone) {
+  if (((m_controller->pressed(Control::DOWN) && !m_growing && !m_stone) || ((m_duck || m_wants_buttjump || m_crawl) && m_controller->hold(Control::DOWN))) &&
+    !m_swimming && !m_sliding && !m_stone && !m_growing) {
     do_duck();
   }
-  else {
+  else if (!m_sliding && !m_growing) {
     do_standup(false);
   }
 
@@ -1744,7 +1831,7 @@ Player::position_grabbed_object(bool teleport)
 bool
 Player::try_grab()
 {
-  if (m_controller->hold(Control::ACTION) && !m_grabbed_object && !m_duck && !m_released_object)
+  if (m_controller->hold(Control::ACTION) && !m_grabbed_object && !(m_duck ^ m_crawl) && !m_released_object)
   {
 
     Vector pos(0.0f, 0.0f);
@@ -1911,7 +1998,7 @@ Player::set_bonus(BonusType type, bool animate, bool increment_powerup_counter)
   }
 
   if ((get_bonus() == NO_BONUS) && (type != NO_BONUS || m_stone)) {
-    if (!m_swimming)
+    if (!m_swimming && !m_sliding)
     {
       if (!adjust_height(BIG_TUX_HEIGHT))
       {
@@ -2001,7 +2088,7 @@ Player::draw(DrawingContext& context)
   if(Editor::is_active())
     return;
 
-  if (is_dead() && m_target && Sector::get().get_object_count<Player>([this](const Player& p){ return !p.is_dead() && !p.is_dying() && !p.is_winning() && &p != this; }))
+  if (is_dead() && m_target && Sector::get().get_object_count<Player>([this](const Player& p){ return p.is_active() && &p != this; }))
   {
     auto* target = Sector::get().get_object_by_uid<Player>(*m_target);
     if (target)
@@ -2026,6 +2113,7 @@ Player::draw(DrawingContext& context)
   // if Tux is above camera, draw little "air arrow" to show where he is x-wise
   if (m_col.m_bbox.get_bottom() - 16 < Sector::get().get_camera().get_translation().y) {
     float px = m_col.m_bbox.get_left() + (m_col.m_bbox.get_right() - m_col.m_bbox.get_left() - static_cast<float>(m_airarrow.get()->get_width())) / 2.0f;
+    px += context.get_time_offset() * m_physic.get_velocity().x;
     float py = Sector::get().get_camera().get_translation().y;
     py += std::min(((py - (m_col.m_bbox.get_bottom() + 16)) / 4), 16.0f);
     context.color().draw_surface(m_airarrow, Vector(px, py), LAYER_HUD - 1);
@@ -2097,15 +2185,16 @@ Player::draw(DrawingContext& context)
       m_sprite->set_action(sa_prefix +"-slidejump"+ sa_postfix);
     }
     else {
+      const bool was_growing_before = (m_sprite->get_action().substr(0, 9) == "slidegrow");
       m_sprite->set_action(sa_prefix + "-slide" + sa_postfix);
-      if (m_was_crawling_before_slide)
+      if (m_was_crawling_before_slide || was_growing_before)
       {
-        m_sprite->set_frame(m_sprite->get_frames()); // Skip the "duck" animation when coming from crawling
+        m_sprite->set_frame(m_sprite->get_frames()); // Skip the "duck" animation when coming from crawling or slidegrowing
         m_was_crawling_before_slide = false;
       }
     }
   }
-  else if (m_duck && is_big() && !m_swimming && !m_crawl) {
+  else if (m_duck && is_big() && !m_swimming && !m_crawl && !m_stone) {
     m_sprite->set_action(sa_prefix+"-duck"+sa_postfix);
   }
   else if (m_crawl)
@@ -2254,9 +2343,12 @@ Player::draw(DrawingContext& context)
     get_bonus() == EARTH_BONUS ? Color(1.f, 0.9f, 0.6f) :
     Color(1.f, 1.f, 1.f));
 
+  for (auto& bubble_sprite : m_active_bubbles)
+  {
+    bubble_sprite.first->draw(context.color(), bubble_sprite.second, LAYER_TILES - 5);
+  }
   m_sprite->set_color(m_stone ? Color(1.f, 1.f, 1.f) : power_color);
 }
-
 
 void
 Player::collision_tile(uint32_t tile_attributes)
@@ -2436,17 +2528,18 @@ Player::kill(bool completely)
   if (!completely && is_big()) {
     SoundManager::current()->play("sounds/hurt.wav", get_pos());
 
-    if (get_bonus() == FIRE_BONUS
-      || get_bonus() == ICE_BONUS
-      || get_bonus() == AIR_BONUS
-      || get_bonus() == EARTH_BONUS) {
+    if (get_bonus() > GROWUP_BONUS)
+    {
       m_safe_timer.start(TUX_SAFE_TIME);
       m_is_intentionally_safe = false;
       set_bonus(GROWUP_BONUS, true);
-    } else if (get_bonus() == GROWUP_BONUS) {
+    }
+    else if (get_bonus() == GROWUP_BONUS)
+    {
       m_safe_timer.start(TUX_SAFE_TIME /* + GROWING_TIME */);
       m_is_intentionally_safe = false;
       m_duck = false;
+      m_crawl = false;
       stop_backflipping();
       set_bonus(NO_BONUS, true);
     }
@@ -2472,7 +2565,7 @@ Player::kill(bool completely)
     m_dying_timer.start(3.0);
     set_group(COLGROUP_DISABLED);
 
-    auto alive_players = Sector::get().get_object_count<Player>([](const Player& p){ return !p.is_dead() && !p.is_dying(); });
+    auto alive_players = Sector::get().get_object_count<Player>([](const Player& p){ return p.is_alive(); });
 
     if (!alive_players)
     {
@@ -2548,7 +2641,7 @@ Player::check_bounds()
   }
 
   // If Tux is swimming, don't allow him to go below the sector
-  if (m_swimming && !m_ghost_mode && !is_dying() && !is_dead()
+  if (m_swimming && !m_ghost_mode && is_alive()
       && m_col.m_bbox.get_bottom() > Sector::get().get_height()) {
     m_col.set_pos(Vector(m_col.m_bbox.get_left(),
                          Sector::get().get_height() - m_col.m_bbox.get_height()));
@@ -2919,7 +3012,7 @@ Player::next_target()
   bool is_next = false;
   for (auto* player : players)
   {
-    if (!player->is_dead() && !player->is_dying() && !player->is_winning())
+    if (player->is_active())
     {
       if (!first)
       {
@@ -2959,7 +3052,7 @@ Player::prev_target()
   Player* last = nullptr;
   for (auto* player : players)
   {
-    if (!player->is_dead() && !player->is_dying() && !player->is_winning())
+    if (player->is_active())
     {
       if (m_target && player->get_uid() == *m_target && last)
       {
@@ -3106,6 +3199,8 @@ Player::register_class(ssq::VM& vm)
   cls.addFunc("get_input_pressed", &Player::get_input_pressed);
   cls.addFunc("get_input_held", &Player::get_input_held);
   cls.addFunc("get_input_released", &Player::get_input_released);
+
+  cls.addVar("visible", &Player::m_visible);
 }
 
 /* EOF */

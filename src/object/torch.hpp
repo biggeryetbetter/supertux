@@ -51,19 +51,15 @@ public:
   virtual ObjectSettings get_settings() override;
   virtual void after_editor_set() override;
 
-  virtual int get_layer() const override { return m_layer; }
-
   virtual void on_flip(float height) override;
 
   /**
    * @scripting
-   * @deprecated Use the ""burning"" property instead!
    * @description Returns ""true"" if the torch is burning.
    */
   bool get_burning() const;
   /**
    * @scripting
-   * @deprecated Use the ""burning"" property instead!
    * @description Switches the burning state of the torch.
    * @param bool $burning
    */
