@@ -146,6 +146,8 @@ const float STONE_UP_ACCELERATION = 400.f;
 /* Swim variables */
 const float SWIM_SPEED = 300.f;
 const float SWIM_BOOST_SPEED = 600.f;
+const float SWIM_ACCEL = 600.f;
+const float SWIM_BOOST_ACCEL = 2400.f;
 const float TURN_MAGNITUDE = 0.15f;
 const float TURN_MAGNITUDE_BOOST = 0.2f;
 const std::array<std::string, 2> BUBBLE_ACTIONS = { "normal", "small" };
@@ -228,7 +230,6 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   // constructor
   m_sprite(SpriteManager::current()->create("images/creatures/tux/tux.sprite")),
   m_swimming_angle(0),
-  m_swimming_accel_modifier(100.f),
   m_water_jump(false),
   m_airarrow(Surface::from_file("images/engine/hud/airarrow.png")),
   m_bubbles_sprite(SpriteManager::current()->create("images/particles/air_bubble.sprite")),
@@ -1089,15 +1090,13 @@ Player::swim(float pointx, float pointy, bool boost)
 
     if (m_swimming && !m_water_jump)
     {
-      m_swimming_accel_modifier = is_ang_defined ? 1.f : 0.f;
+      float speed = is_ang_defined ? 1.f : 0.f;
+      speed *= boost ? SWIM_BOOST_SPEED : SWIM_SPEED;
+      float accel_mag = boost ? SWIM_BOOST_ACCEL : SWIM_ACCEL;
 
       if (boost) {
-        m_swimming_accel_modifier = m_swimming_accel_modifier * SWIM_BOOST_SPEED;
         m_swimboosting = true;
-      }
-      else
-      {
-        m_swimming_accel_modifier = m_swimming_accel_modifier * SWIM_SPEED;
+      } else {
         if (glm::length(m_physic.get_velocity()) < SWIM_SPEED + 10.f) {
           m_swimboosting = false;
         }
@@ -1108,13 +1107,12 @@ Player::swim(float pointx, float pointy, bool boost)
         if (std::abs(delta) < 0.01f)
           m_swimming_angle = pointed_angle;
 
-        Vector acceleration = math::vec2_from_polar(m_swimming_accel_modifier, pointed_angle);
+        Vector acceleration = math::vec2_from_polar(accel_mag, pointed_angle);
        
-        // Prevent backwards acceleration, i.e. Tux slowing himself down when he is already going faster
-        // than his swimming speed.
-        if (vx * pointx > acceleration.x * pointx)
+        // Don't let Tux go too fast.
+        if (vx * pointx > speed)
           acceleration.x = 0;
-        if (vy * pointy > acceleration.y * pointy)
+        if (vy * pointy > speed)
           acceleration.y = 0;
 
         m_physic.set_acceleration(acceleration);
@@ -1197,8 +1195,9 @@ Player::apply_friction()
     // mapped between 0.95 and 0.99. Tux is more aerodynamic going forwards than backwards.
     Vector swimming_direction = math::vec2_from_polar(1.f, m_swimming_angle);
     Vector fac = swimming_direction - glm::normalize(m_physic.get_velocity());
+    float modifier = m_swimboosting ? 0.5f : 2.0f;
 
-    fac = Vector(0.99f) - glm::abs(fac) / 2.0f * 0.04;
+    fac = Vector(0.99f) - glm::abs(fac) / modifier * 0.04;
 
     m_physic.set_velocity(m_physic.get_velocity() * fac);
   } else

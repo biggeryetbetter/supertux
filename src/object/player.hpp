@@ -565,7 +565,6 @@ private:
   SpritePtr m_sprite; /**< The main sprite representing Tux */
 
   float m_swimming_angle;
-  float m_swimming_accel_modifier;
   bool m_water_jump;
 
   SurfacePtr m_airarrow; /**< arrow indicating Tux' position when he's above the camera */
