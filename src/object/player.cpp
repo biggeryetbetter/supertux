@@ -179,6 +179,7 @@ Player::Player(PlayerStatus& player_status, const std::string& name_, int player
   m_on_right_wall(false),
   m_in_walljump_tile(false),
   m_can_walljump(false),
+  m_dive_speed(0.f),
   m_boost(0.f),
   m_speedlimit(0), //no special limit
   m_velocity_override(),
@@ -517,6 +518,7 @@ Player::update(float dt_sec)
         m_no_water = false;
         m_water_jump = false;
         m_swimming = true;
+        m_dive_speed = glm::length(m_physic.get_velocity());
         m_swimming_angle = math::angle(Vector(m_physic.get_velocity_x(), m_physic.get_velocity_y()));
         m_physic.set_acceleration(0.0f, 0.0f);
         if (is_big())
@@ -901,6 +903,12 @@ Player::swim(float pointx, float pointy, bool boost)
     if (m_swimming)
       m_physic.set_gravity_modifier(.0f);
 
+    if (pointy != -1) {
+      m_dive_speed = 0.f;
+    }
+
+    std::cout << m_dive_speed << "\n";
+
     // Angle
     bool is_ang_defined = (pointx != 0) || (pointy != 0);
     float pointed_angle = math::angle(Vector(pointx, pointy));
@@ -946,12 +954,18 @@ Player::swim(float pointx, float pointy, bool boost)
           m_swimming_angle = pointed_angle;
 
         Vector acceleration = math::vec2_from_polar(accel_mag, pointed_angle);
+        acceleration += Vector(0, -m_dive_speed*2.f);
        
         // Don't let Tux go too fast.
         if (vx * pointx > speed)
           acceleration.x = 0;
-        if (vy * pointy > speed)
+        if (m_dive_speed != 0.f) {
+          if (vy * pointy > m_dive_speed)
+            acceleration.y = 0;
+        }
+        else if (vy * pointy > speed)
           acceleration.y = 0;
+          
 
         m_physic.set_acceleration(acceleration);
       } else {
@@ -969,6 +983,7 @@ Player::swim(float pointx, float pointy, bool boost)
     }
     if (m_water_jump && !m_swimming)
     {
+      m_dive_speed = 0.f;
       m_swimming_angle = math::angle(Vector(vx, vy));
     }
 
