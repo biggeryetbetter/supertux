@@ -53,6 +53,7 @@ inline Vector move_towards(Vector const& from, Vector const& to, float d) {
 // Change a velocity vector towards another, but do not change a component towards zero unless their signs are opposite.
 inline Vector push_to_velocity(Vector const& from, Vector const& to, float d) {
   if (d == 0.f) return from;
+  if (from == to) return from;
 
   Vector diff = glm::normalize(to - from) * d;
   Vector result = from;
