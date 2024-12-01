@@ -91,9 +91,7 @@ GameSession::GameSession(const std::string& levelfile_, Savegame& savegame, Stat
 {
   set_start_point(DEFAULT_SECTOR_NAME, DEFAULT_SPAWNPOINT_NAME);
 
-  m_boni_at_start.resize(InputManager::current()->get_num_users(), NO_BONUS);
-  m_max_fire_bullets_at_start.resize(InputManager::current()->get_num_users(), 0);
-  m_max_ice_bullets_at_start.resize(InputManager::current()->get_num_users(), 0);
+  m_boni_at_start.resize(InputManager::current()->get_num_users(), BONUS_NONE);
 
   m_data_table.clear();
 
@@ -118,8 +116,6 @@ GameSession::reset_level()
   PlayerStatus& currentStatus = m_savegame.get_player_status();
   currentStatus.coins = m_coins_at_start;
   currentStatus.bonus = m_boni_at_start;
-  currentStatus.max_fire_bullets = m_max_fire_bullets_at_start;
-  currentStatus.max_ice_bullets = m_max_ice_bullets_at_start;
 
   clear_respawn_points();
   m_activated_checkpoint = nullptr;
@@ -129,13 +125,41 @@ GameSession::reset_level()
   m_data_table.clear();
 }
 
+void
+GameSession::on_player_added(int id)
+{
+  if (m_savegame.get_player_status().m_num_players <= id)
+    m_savegame.get_player_status().add_player();
+
+  // ID = 0 is impossible, so no need to write `(id == 0) ? "" : ...`
+  auto& player = m_currentsector->add<Player>(m_savegame.get_player_status(), "Tux" + std::to_string(id + 1), id);
+
+  player.multiplayer_prepare_spawn();
+}
+
+bool
+GameSession::on_player_removed(int id)
+{
+  // Sectors in worldmaps have no Player's of that class
+  if (!m_currentsector)
+    return false;
+
+  for (Player* player : m_currentsector->get_players())
+  {
+    if (player->get_id() == id)
+    {
+      player->remove_me();
+      return true;
+    }
+  }
+  return false;
+}
+
 int
 GameSession::restart_level(bool after_death, bool preserve_music)
 {
   const PlayerStatus& currentStatus = m_savegame.get_player_status();
   m_coins_at_start = currentStatus.coins;
-  m_max_fire_bullets_at_start = currentStatus.max_fire_bullets;
-  m_max_ice_bullets_at_start = currentStatus.max_ice_bullets;
   m_boni_at_start = currentStatus.bonus;
 
   // Needed for the title screen apparently.
@@ -145,7 +169,7 @@ GameSession::restart_level(bool after_death, bool preserve_music)
     {
       for (const auto& p : m_currentsector->get_players())
       {
-        p->set_bonus(m_boni_at_start.at(p->get_id()), false, false);
+        p->set_bonus(m_boni_at_start.at(p->get_id()), false);
         m_boni_at_start[p->get_id()] = currentStatus.bonus[p->get_id()];
       }
     }
@@ -390,8 +414,6 @@ GameSession::abort_level()
 
   PlayerStatus& currentStatus = m_savegame.get_player_status();
   currentStatus.coins = m_coins_at_start;
-  currentStatus.max_fire_bullets = m_max_fire_bullets_at_start;
-  currentStatus.max_ice_bullets = m_max_ice_bullets_at_start;
   SoundManager::current()->stop_sounds();
 }
 
@@ -475,7 +497,6 @@ GameSession::setup()
     const Vector shrinkpos = get_fade_point();
     ScreenManager::current()->set_screen_fade(std::make_unique<ShrinkFade>(shrinkpos, TELEPORT_FADE_TIME, SHRINKFADE_LAYER, ShrinkFade::FADEIN));
   }
-
 
   m_end_seq_started = false;
 }
@@ -604,7 +625,17 @@ GameSession::update(float dt_sec, const Controller& controller)
         m_play_time += dt_sec;
         m_level->m_stats.finish(m_play_time);
       }
+
+      for (Player* player : m_currentsector->get_players())
+      {
+        if (player->get_controller().pressed(Control::ITEM) && m_savegame.get_player_status().m_item_pockets.size() > 0)
+        {
+          player->get_status().give_item_from_pocket(player);
+        }
+      }
+
       m_currentsector->update(dt_sec);
+
     } else {
       bool are_all_stopped = true;
 
@@ -756,7 +787,6 @@ GameSession::respawn_with_fade(const std::string& sector,
       player->make_temporarily_safe(TELEPORT_FADE_TIME);
     }
   }
-
 }
 
 void
@@ -775,30 +805,11 @@ GameSession::set_start_pos(const std::string& sector, const Vector& pos)
 }
 
 void
-GameSession::set_respawn_point(const std::string& sector,
-                               const std::string& spawnpoint)
-{
-  m_spawnpoints.push_back({ sector, spawnpoint });
-}
-
-void
-GameSession::set_respawn_pos(const std::string& sector, const Vector& pos)
-{
-  m_spawnpoints.push_back({ sector, pos });
-}
-
-void
 GameSession::clear_respawn_points()
 {
   // Delete all respawn points (all, other than the start one).
   if (m_spawnpoints.size() > 1)
     m_spawnpoints.erase(m_spawnpoints.begin() + 1, m_spawnpoints.end());
-}
-
-const GameSession::SpawnPoint&
-GameSession::get_last_spawnpoint() const
-{
-  return m_spawnpoints.back();
 }
 
 void
@@ -808,22 +819,10 @@ GameSession::set_checkpoint_pos(const std::string& sector, const Vector& pos)
   m_activated_checkpoint = &m_spawnpoints.back();
 }
 
-const GameSession::SpawnPoint*
-GameSession::get_active_checkpoint_spawnpoint() const
-{
-  return m_activated_checkpoint;
-}
-
 std::string
 GameSession::get_working_directory() const
 {
   return FileSystem::dirname(m_levelfile);
-}
-
-bool
-GameSession::has_active_sequence() const
-{
-  return m_end_sequence;
 }
 
 void
