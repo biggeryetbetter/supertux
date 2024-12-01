@@ -1204,7 +1204,7 @@ Player::apply_friction()
   else
     friction *= (NORMAL_FRICTION_MULTIPLIER*(m_sliding ? 0.8f : m_stone ? 0.4f : 1.f));
 
-  if (m_swimming)
+  if (m_swimming && glm::length(m_physic.get_velocity()) != 0.f)
   {
     // Friction factor in water is how similar Tux's swimming direction is to his actual direction,
     // mapped between 0.95 and 0.99. Tux is more aerodynamic going forwards than backwards.
