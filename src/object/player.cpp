@@ -138,8 +138,8 @@ const float STONE_DOWN_ACCELERATION = 300.f;
 const float STONE_UP_ACCELERATION = 400.f;
 
 /* Swim variables */
-const float SWIM_SPEED = 300.f;
-const float SWIM_BOOST_SPEED = 600.f;
+const float SWIM_SPEED = 200.f;
+const float SWIM_BOOST_SPEED = 400.f;
 const float SWIM_ACCEL = 600.f;
 const float SWIM_BOOST_ACCEL = 2400.f;
 const float TURN_MAGNITUDE = 0.15f;
@@ -906,8 +906,6 @@ Player::swim(float pointx, float pointy, bool boost)
     if (pointy != -1) {
       m_dive_speed = 0.f;
     }
-
-    std::cout << m_dive_speed << "\n";
 
     // Angle
     bool is_ang_defined = (pointx != 0) || (pointy != 0);
