@@ -144,6 +144,8 @@ const float SWIM_ACCEL = 600.f;
 const float SWIM_BOOST_ACCEL = 2400.f;
 const float TURN_MAGNITUDE = 0.15f;
 const float TURN_MAGNITUDE_BOOST = 0.2f;
+const float SWIM_JUMP_SPEED = 450.f;
+const float SWIM_BOOST_JUMP_SPEED = 600.f;
 
 /* Buttjump variables */
 
@@ -458,8 +460,12 @@ Player::update(float dt_sec)
       if (m_swimming)
       {
         m_water_jump = true;
-        if (m_physic.get_velocity_y() > -350.f && m_controller->hold(Control::UP))
-          m_physic.set_velocity_y(-350.f);
+        if (m_controller->hold(Control::UP)) {
+          if (m_physic.get_velocity_y() > -SWIM_JUMP_SPEED && !m_swimboosting)
+            m_physic.set_velocity_y(-SWIM_JUMP_SPEED);
+          else if (m_physic.get_velocity_y() > -SWIM_BOOST_JUMP_SPEED && m_swimboosting) // Bigger jump if boosting
+            m_physic.set_velocity_y(-SWIM_BOOST_JUMP_SPEED);
+        }
       }
       m_swimming = false;
     }
