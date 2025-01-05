@@ -166,7 +166,9 @@ TileMap::parse_tiles(const ReaderMapping& reader)
   reader.get("height", m_height);
   if (m_width < 0 || m_height < 0)
   {
-    //throw std::runtime_error("Invalid/No width/height specified in tilemap.");
+    if (!Sector::current())
+      throw std::runtime_error("Invalid/No width/height specified in tilemap.");
+
     m_width = 0;
     m_height = 0;
     m_tiles.clear();
@@ -176,7 +178,7 @@ TileMap::parse_tiles(const ReaderMapping& reader)
   }
   else
   {
-    reader.get("tiles", m_tiles);
+    reader.get_compressed("tiles", m_tiles);
     if (m_tiles.empty())
       throw std::runtime_error("No tiles in tilemap.");
 
@@ -204,6 +206,14 @@ TileMap::parse_tiles(const ReaderMapping& reader)
   m_new_size_y = m_height;
   m_new_offset_x = 0;
   m_new_offset_y = 0;
+}
+
+void
+TileMap::write_tiles(Writer& writer) const
+{
+  writer.write("width", m_width);
+  writer.write("height", m_height);
+  writer.write_compressed("tiles", m_tiles);
 }
 
 void
@@ -310,7 +320,7 @@ TileMap::get_settings()
 
   result.add_tiles(_("Tiles"), this, "tiles");
 
-  result.reorder({"solid", "running", "speed-x", "speed-y", "tint", "draw-target", "alpha", "z-pos", "name", "path-ref", "width", "height", "tiles"});
+  result.reorder({"solid", "running", "speed-x", "speed-y", "tint", "draw-target", "alpha", "z-pos", "name", "path-ref", "tiles"});
 
   if (!m_editor_active) {
     result.add_remove();
@@ -992,7 +1002,7 @@ TileMap::register_class(ssq::VM& vm)
   cls.addFunc<void, TileMap, float, float, float, float, float>("tint_fade", &TileMap::tint_fade);
   cls.addFunc("set_alpha", &TileMap::set_alpha);
   cls.addFunc("get_alpha", &TileMap::get_alpha);
-  cls.addFunc("set_solid", &TileMap::set_solid);
+  cls.addFunc("set_solid", &TileMap::set_solid, ssq::DefaultArguments<bool>(true));
   cls.addFunc("get_solid", &TileMap::get_solid);
 
   cls.addVar("alpha", &TileMap::get_alpha, &TileMap::set_alpha);

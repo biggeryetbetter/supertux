@@ -52,10 +52,6 @@ class Editor final : public Screen,
 public:
   static bool is_active();
 
-  static PHYSFS_EnumerateCallbackResult foreach_recurse(void *data,
-                                                        const char *origdir,
-                                                        const char *fname);
-
 private:
   static bool is_autosave_file(const std::string& filename) {
     return StringUtil::has_suffix(filename, "~");
@@ -174,6 +170,8 @@ private:
   void set_sector(Sector* sector);
   void set_level(std::unique_ptr<Level> level, bool reset = true);
   void reload_level();
+  void reset_level();
+  void reactivate();
   void quit_editor();
   /**
    * @param filename    If non-empty, save to this file instead.
@@ -186,8 +184,6 @@ private:
   void update_keyboard(const Controller& controller);
 
   void keep_camera_in_bounds();
-
-  void post_undo_redo_actions();
 
 protected:
   std::unique_ptr<Level> m_level;
@@ -210,6 +206,8 @@ public:
   std::optional<std::pair<std::string, Vector>> m_test_pos;
 
   std::string* m_particle_editor_filename;
+
+  bool m_ctrl_pressed;
 
 private:
   Sector* m_sector;
@@ -236,7 +234,6 @@ private:
   float m_scroll_speed;
   float m_new_scale;
 
-  bool m_ctrl_pressed;
   Vector m_mouse_pos;
 
 private:

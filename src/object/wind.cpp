@@ -93,7 +93,7 @@ Wind::get_settings()
   result.add_bool(_("Fancy Particles"), &fancy_wind, "fancy-wind", true);
   result.add_bool(_("Particles Enabled"), &particles_enabled, "particles-enabled", true);
 
-  result.reorder({ "blowing", "speed-x", "speed-y", "acceleration", "feather-distance", "affects-badguys", "affects-objects", "affects-player", "fancy-wind", "particles-enabled", "region", "name", "x", "y" });
+  result.reorder({ "blowing", "speed-x", "speed-y", "acceleration", "feather-distance", "affects-badguys", "affects-objects", "affects-player", "fancy-wind", "particles-enabled", "width", "height", "region", "name", "x", "y" });
 
   return result;
 }
